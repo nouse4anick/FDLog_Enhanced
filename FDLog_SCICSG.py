@@ -40,10 +40,22 @@ fdfont = (typeface, fontsize)  # regular fixed width font
 fdmfont = (typeface, fontsize + fontinterval)  # medium  fixed width font
 fdbfont = (typeface, fontsize + fontinterval * 2)  # large   fixed width font
 
+# Time Conversion Chart
 tzchart = """
  UTC       PDT  CDT  EDT
  GMT  PST  CST  EST
 """
+for g in range(0, 2400, 100):
+    p = g - 800
+    if (p < 0): p += 2400
+    c = p + 100
+    if (c < 0): c += 2400
+    e = c + 100
+    if (e < 0): e += 2400
+    x = e + 100
+    if (x < 0): x += 2400
+    tzchart += "%04d %04d %04d %04d %04d\n" % (g, p, c, e, x)
+
 #  Changed the color of the user buttons to red until assigned - KD4SIR Scott Hibbs 7/14/2013
 ocolor = 'red'
 lcolor = 'red'
@@ -2024,25 +2036,9 @@ def contestlog(pr):
     print
     print "entry and log written to file", logfile
 
-# setup for phonetics printout  ## Added by Scott Hibbs KD4SIR to get phonetics on bottom of gui?
-# d = {"a":"alpha ","b":"bravo ","c":"charlie ","d":"delta ","e":"echo ", \
-#     "f":"foxtrot ","g":"golf ","h":"hotel ","i":"india ","j":"juliett ", \
-#     "k":"kilo ","l":"lima ","m":"mike ","n":"november ","o":"oscar ", \
-#     "p":"papa ","q":"quebec ","r":"romeo ","s":"sierra ","t":"tango ", \
-#     "u":"uniform ","v":"victor ","w":"whiskey ","x":"x-ray ","y":"yankee ", \
-#     "z":"zulu ","-":"dash ", "/":"dash ", "0":"Zero ", "1":"One ", "2":"Two ", "3":"Three ", \
-#     "4":"Four ", "5":"Five ", "6":"Six ", "7":"Seven ", "8":"Eight ", "9":"Nine "}
-# phonetics = "ab9cde" #string.lower(gd.getv('fdcall'))
-# let:char = d
-# phocall = ""
-# for char in phonetics:
-#    if char in d:
-#        phocall = phocall.join(char)
-
 # band set buttons
 # this can be customized -Only here customizing this in program will break from compatibility with
 # original fdlog.py -Scott Hibbs Oct/13/2013
-
 
 def bandset(b):
     global band, tmob
@@ -2541,95 +2537,6 @@ def testqgen(n):
             time.sleep(0.1)
     else:
         txtbillb.insert(END, "This command only available while testing with tst.")
-
-# global section, main program
-# setup persistent globals before GUI
-
-
-tmob = now()  # time started on band in min
-loadglob()  # load persistent globals from file
-
-# Start Main program (everything above should be setup only)
-print prog
-fingerprint()
-print
-if node == "":
-    # Revised 4/19/2014 for 8 characters so the log lines up nicely. - Scott Hibbs KD4SIR
-    print "  Enter the station name"
-    print "  Please be 7 characters! (I will add letters to be unique)"
-    print "  (Use 'gota' for get on the air station)"
-    #    print "  (Previous Node ID: '%s')"%node
-    print "  (7 characters}"
-    k = string.lower(string.strip(sys.stdin.readline())[:8])
-    if len(k) == 8:
-        print "That's to many.. (Marc? is that you?)" # Thanks to Marc Fountain K9MAF for the correction. Mar/23/2017
-        k = k[:7]
-    z = len(k)
-    if k != 'gota':
-        while z != 7:
-            if k == 'gota':
-                print "please restart the program."
-                sys.exit()
-            else:              
-                if z < 4:
-                    print "um yeah.. 7 characters....    (restart if your gota)"
-                    k = string.lower(string.strip(sys.stdin.readline())[:8])
-                    z = len(k)
-                else:
-                    for z in range(z, 7):
-                        print "close enough (Ken? is that you?)"
-                        k = k + random.choice('abcdefghijklmnopqrstuvwxyz')
-                        print k
-                        z = len(k)
-                        ## 1. if there is more than four characters
-                        ## 2. add the rest with randoms
-        else:
-            print "Thank You!!"
-            node = k + random.choice('abcdefghijklmnopqrstuvwxyz')
-            print
-    else:
-        print "Thank You for being gota!!"
-        node = 'gotanode'
-        print
-print "Using Node ID: '%s' " % node
-print
-# get auth key  auth xxxpppzzz..  fdlogxxx.fdd  port ppp   hashkey (all)
-# allow user to select new one, or re-use previous
-print "Enter Authentication Key (Return to re-use previous '%s')" % authk
-print "  (use 'tst' for testing, two digit year for contest):"
-k = string.strip(sys.stdin.readline())
-if k != "":
-    print "New Key entered, Contestant and logger cleared"
-    authk = k
-    operator = ""
-    logger = ""
-    print
-print "Using Authentication Key: '%s'" % authk
-print "Using", authk[0:3], "for setting port, file"
-port_offset = ival(authk[3:6]) * 7
-if port_offset == 0: port_offset = ival(authk[0:3]) * 7
-# for each char in port_offset:  xxx
-# port_offset = ((port_offset << 3) + (char & 15)) & 0x0fff
-port_base += port_offset
-print "Using Network Port:", port_base
-logdbf = "fdlog%s.fdd" % (authk[0:3])
-print "Writing Log Journal file:", logdbf
-print "Starting Network"
-net = netsync()  # setup net
-net.setport(port_base)
-net.setauth(authk)
-print "Saving Persistent Configuration in", globf
-saveglob()
-print "Time Difference Window (tdwin):", tdwin, "seconds"
-print "Starting GUI setup"
-
-# note: cannot move down with rest of init code from this point, error in class edit dialog occurs
-root = Tk()  # setup Tk GUI
-# root.withdraw()  # This was removed in the last beta without explaination - sah 7/3/2015
-menu = Menu(root)
-root.config(menu=menu)
-
-
 
 
 def testcmd(name, rex, value):
@@ -3170,6 +3077,91 @@ def focevent(e):
     txtbillb.mark_set('insert', END)
     return "break"
 
+# global section, main program
+# setup persistent globals before GUI
+
+
+tmob = now()  # time started on band in min
+loadglob()  # load persistent globals from file
+
+# Start Main program (everything above should be setup only)
+print prog
+fingerprint()
+print
+if node == "":
+    # Revised 4/19/2014 for 8 characters so the log lines up nicely. - Scott Hibbs KD4SIR
+    print "  Enter the station name"
+    print "  Please be 7 characters! (I will add letters to be unique)"
+    print "  (Use 'gota' for get on the air station)"
+    #    print "  (Previous Node ID: '%s')"%node
+    print "  (7 characters}"
+    k = string.lower(string.strip(sys.stdin.readline())[:8])
+    if len(k) == 8:
+        print "That's to many.. (Marc? is that you?)" # Thanks to Marc Fountain K9MAF for the correction. Mar/23/2017
+        k = k[:7]
+    z = len(k)
+    if k != 'gota':
+        while z != 7:
+            if k == 'gota':
+                print "please restart the program."
+                sys.exit()
+            else:              
+                if z < 4:
+                    print "um yeah.. 7 characters....    (restart if your gota)"
+                    k = string.lower(string.strip(sys.stdin.readline())[:8])
+                    z = len(k)
+                else:
+                    for z in range(z, 7):
+                        print "close enough (Ken? is that you?)"
+                        k = k + random.choice('abcdefghijklmnopqrstuvwxyz')
+                        print k
+                        z = len(k)
+                        ## 1. if there is more than four characters
+                        ## 2. add the rest with randoms
+        else:
+            print "Thank You!!"
+            node = k + random.choice('abcdefghijklmnopqrstuvwxyz')
+            print
+    else:
+        print "Thank You for being gota!!"
+        node = 'gotanode'
+        print
+print "Using Node ID: '%s' " % node
+print
+# get auth key  auth xxxpppzzz..  fdlogxxx.fdd  port ppp   hashkey (all)
+# allow user to select new one, or re-use previous
+print "Enter Authentication Key (Return to re-use previous '%s')" % authk
+print "  (use 'tst' for testing, two digit year for contest):"
+k = string.strip(sys.stdin.readline())
+if k != "":
+    print "New Key entered, Contestant and logger cleared"
+    authk = k
+    operator = ""
+    logger = ""
+    print
+print "Using Authentication Key: '%s'" % authk
+print "Using", authk[0:3], "for setting port, file"
+port_offset = ival(authk[3:6]) * 7
+if port_offset == 0: port_offset = ival(authk[0:3]) * 7
+# for each char in port_offset:  xxx
+# port_offset = ((port_offset << 3) + (char & 15)) & 0x0fff
+port_base += port_offset
+print "Using Network Port:", port_base
+logdbf = "fdlog%s.fdd" % (authk[0:3])
+print "Writing Log Journal file:", logdbf
+print "Starting Network"
+net = netsync()  # setup net
+net.setport(port_base)
+net.setauth(authk)
+print "Saving Persistent Configuration in", globf
+saveglob()
+print "Time Difference Window (tdwin):", tdwin, "seconds"
+print "Starting GUI setup"
+
+# note: cannot move down with rest of init code from this point, error in class edit dialog occurs
+root = Tk()  # setup Tk GUI
+# root.withdraw()  # This was removed in the last beta without explaination - sah 7/3/2015
+
 class Edit_Dialog(Toplevel):
     """edit log entry dialog"""
     """Added functionality to check for dupes and change the title to show the error - Scott Hibbs Jul/02/2016"""
@@ -3438,11 +3430,7 @@ def update():
     updatebb()
     net.si.age_data()
     mclock.adjust()
-    #   if mclock.level == 0:  # time master broadcasts time more frequently
-    #   net.bcast_time()
     updatect += 1
-    # if (updatect % 5) == 0:         # 5 sec
-    # net.bcast_now()
     if (updatect % 10) == 0:  # 10 sec
         updateqct()  # this updates rcv packet fail
         renew_title()  # this sends status broadcast
@@ -3451,31 +3439,33 @@ def update():
     if updatect > 59:  # 60 sec
         updatect = 0
 
+# functions and classes loaded, move to final init and gui start
 
+# Menu Setup
+menu = Menu(root)
+root.config(menu=menu)
 
+# File Menu
 filemenu = Menu(menu, tearoff=0)
 menu.add_cascade(label="File", menu=filemenu)
 filemenu.add_command(label="Save Entry File", command=lambda: contestlog(1))
-filemenu.add_command(label="PreView Saved Entry File",
-                     command=lambda: viewtextf('fdlog.log'))
-filemenu.add_command(label="View Log Data File",
-                     command=lambda: viewtextf(logdbf))
+filemenu.add_command(label="PreView Saved Entry File", command=lambda: viewtextf('fdlog.log'))
+filemenu.add_command(label="View Log Data File", command=lambda: viewtextf(logdbf))
 filemenu.add_command(label="Exit", command=root.quit)
 
+# properties menu
 propmenu = Menu(menu, tearoff=0)
 menu.add_cascade(label="Properties", menu=propmenu)
 propmenu.add_command(label="Set Node ID", command=noddiag)
 propmenu.add_command(label="Add Participants", command=newpart.dialog)
 
-
-
+# Logs menu
 logmenu = Menu(menu, tearoff=0)
 menu.add_cascade(label="Logs", menu=logmenu)
 logmenu.add_command(label='Full Log', command=lambda: viewlogf(""))
 logmenu.add_command(label='QSTs', command=lambda: viewlogf(r"[*]QST"))
 logmenu.add_command(label='GOTA', command=lambda: viewlogfs("gota"))
 logmenu.add_command(label='WAS', command=viewwasrpt)
-
 for j in modes:
     m = Menu(logmenu, tearoff=0)
     if j == 'c':
@@ -3490,8 +3480,7 @@ for j in modes:
         bm = "%s%s" % (i, j)
         m.add_command(label=bm, command=lambda x=bm: (viewlogf(x)))
 
-
-
+# Resource Menu
 #  Added Resources Menu Item to clean up the menu. - Apr/16/2014 Scott Hibbs
 resourcemenu = Menu(menu, tearoff=0)
 menu.add_cascade(label="Resources", menu=resourcemenu)
@@ -3501,35 +3490,20 @@ resourcemenu.add_command(label="ARRL FD Rules (pdf)", command=lambda: os.startfi
 resourcemenu.add_command(label="ARRL Sections", command=lambda: viewtextf('Arrl_sect.dat', 'ARRL Sections'))
 resourcemenu.add_command(label="ARRL Band Chart (pdf)", command=lambda: os.startfile('Bands.pdf'))
 resourcemenu.add_command(label="ARRL Band Plan", command=lambda: viewtextf('ARRL_Band_Plans.txt', "ARRL Band Plan"))
+resourcemenu.add_command(label="Time Conversion Chart", command=lambda: viewtextv(tzchart, "Time Conversion Chart"))
 # This is not needed with the band chart giving the same info - Scott Hibbs KD4SIR Mar/28/2017 
 #resourcemenu.add_command(label="FD Frequency List", command=lambda: viewtextf('frequencies.txt', "FD Frequency List"))
 # Removed the propagation report. We don't use it. - Mar/29/2017 Scott Hibbs KD4SIR 
 #resourcemenu.add_command(label="Propagation Info", command=lambda: viewtextf('propagation.txt', "Propagation Info"))
 
-
+# W1AW Menu
 # Created a W1AW menu - Scott Hibbs KD4SIR Mar/28/2017
 W1AWmenu = Menu(menu, tearoff=0)
 menu.add_cascade(label="W1AW", menu=W1AWmenu)
 W1AWmenu.add_command(label="W1AW Schedule", command=lambda: viewtextf('w1aw.txt', 'W1AW Schedule'))
 W1AWmenu.add_command(label="NTS Message", command=lambda: os.startfile('NTS_eg.txt'))
 
-
-# functions and classes loaded, move to final init and gui start
-
-# Time Conversion Chart
-for g in range(0, 2400, 100):
-    p = g - 800
-    if (p < 0): p += 2400
-    c = p + 100
-    if (c < 0): c += 2400
-    e = c + 100
-    if (e < 0): e += 2400
-    x = e + 100
-    if (x < 0): x += 2400
-    tzchart += "%04d %04d %04d %04d %04d\n" % (g, p, c, e, x)
-
-
-resourcemenu.add_command(label="Time Conversion Chart", command=lambda: viewtextv(tzchart, "Time Conversion Chart"))
+# Help menu
 helpmenu = Menu(menu, tearoff=0)
 menu.add_cascade(label="Help", menu=helpmenu)
 # Basically reworked the whole menu section. - Scott A Hibbs KD4SIR 7/25/13
@@ -3544,13 +3518,10 @@ helpmenu.add_command(label="Release Log", command=lambda: viewtextf('Releaselog.
 helpmenu.add_command(label="GitHub ReadMe", command=lambda: viewtextf('readme.txt'))
 helpmenu.add_command(label="About SCICSG_FDLOG", command=lambda: viewtextv(about, "About"))
 
-
 # Band Buttons
 f1 = Frame(root, bd=1)
 BandButtons(f1)
 f1.grid(row=0, columnspan=2, sticky=NSEW)
-
-
 
 f1b = Frame(root, bd=0)  # oper logger power and network windows
 
@@ -3571,6 +3542,7 @@ opds.grid(row=0,column=0,sticky=NSEW)
 opdsu = Menu(opds,tearoff=0)
 opds.config(menu=opdsu,direction='below')
 f1b.grid_columnconfigure(0,weight=1)
+
 # Logger
 logmb = Menubutton(f1b,text="Logger",font=fdfont,relief='raised',background=lcolor)
 logmb.grid(row=0,column=4,sticky=NSEW)
@@ -3584,11 +3556,8 @@ logdsu = Menu(logds,tearoff=0)
 logds.config(menu=logdsu,direction='below')
 logdsu.add_command(label="Add New Logger",command=newpart.dialog)
 
-
-
-
-pwrmb = Menubutton(f1b, text="Power", font=fdfont, relief='raised',
-                   background=pcolor)
+# Power
+pwrmb = Menubutton(f1b, text="Power", font=fdfont, relief='raised', background=pcolor)
 pwrmb.grid(row=0, column=6, sticky=NSEW)
 pwrmu = Menu(pwrmb, tearoff=0)
 pwrmb.config(menu=pwrmu, direction='below')
@@ -3611,8 +3580,7 @@ pwrnt.grid(row=0, column=7, sticky=NSEW)
 powlbl = Label(f1b, text="W", font=fdfont, background=pcolor)
 powlbl.grid(row=0, column=8, sticky=NSEW)
 natv = IntVar()
-powcb = Checkbutton(f1b, text="Natural", variable=natv, command=ckpowr,
-                    font=fdfont, relief='raised', background=pcolor)
+powcb = Checkbutton(f1b, text="Natural", variable=natv, command=ckpowr, font=fdfont, relief='raised', background=pcolor)
 powcb.grid(row=0, column=9, sticky=NSEW)
 setpwr(power)
 f1b.grid(row=1, columnspan=2, sticky=NSEW)
@@ -3655,28 +3623,8 @@ logw.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 logw.insert(END, "                            DATABASE DISPLAY WINDOW\n", ("b"))
 logw.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", ("b"))
 logw.insert(END, "%s\n" % prog, ("b"))
-#     Add a bottom window for station information
-# f1c = Frame(root, bd=1)
-# f1c.grid(row=4,columnspan=4,sticky=NSEW)
-#     Add entry box for entering data
-# entqsl = Entry(f1c,font=fdfont,background='grey')
-# entqsl.grid(row=4,column=0,sticky=NSEW)
-# txtentry = Text(f1c,takefocus=1,height=2,width=39,font=fdmfont,\
-# wrap=NONE,setgrid=1)
-# txtentry.grid(row=4,column=4,sticky=NSEW)
-# root.grid_rowconfigure(4,weight=1)
-# txtentry.insert(END,"Call-Class-Sect- \n")
-# fth2lbl = Label(f1c,text="-\n<",font=fdfont,background='grey')
-# fth2lbl.grid(row=4,column=3,sticky=NSEW)
-# Phonetics box
-# fthw2 = Text(f1c,takefocus=0,height=2,width=40,font=fdmfont,\
-#            background='grey',wrap=NONE,setgrid=1)
-# fthw2.configure(cursor='arrow')
-# fthw2.grid(row=4,column=2,sticky=NSEW)
-# root.grid_rowconfigure(4,weight=1)
-# fthw2.insert(END,"phonetics box")
-# txtentry.insert(END,"\n")
-# startup
+
+# gui is done with init, finalize and show gui
 contestlog(0)  # define globals
 buildmenus()
 sms = syncmsg()  # setup sync message service
