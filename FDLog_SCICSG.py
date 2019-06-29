@@ -14,14 +14,19 @@ import sqlite3
 from Tkinter import Tk, END, NORMAL, DISABLED, re, sys, Toplevel, Frame, Label, Entry, Button, \
 W, EW, E, NONE, NSEW, NS, StringVar, Radiobutton, Tk, Menu, Menubutton, Text, Scrollbar, Checkbutton, RAISED, IntVar
 
-# all history removed to readme.md
-
+### Global Vars - can be initialized here
+bands = ('160', '80', '40', '20', '15', '10', '6', '2', '220', '440', '900', '1200', 'sat', 'off')
+modes = ('c', 'd', 'p')
+bandb = {}  # band button handles
+secName = {}
+version = "v19"
+fontsize = 10
+fontinterval = 2
+typeface = 'Courier'
 prog = 'FDLog_SCICSG v2019_Field_Day \n' \
        'Orginal Copyright 2017 by South Central Indiana Communications Support Group \n' \
        'FDLog_SCICSG is under the GNU Public License v2 without warranty. \n' \
        'The original license file is in the folder. \n'
-print prog
-
 about = """
 
 FDLog_Enhanced can be found on www.github.com
@@ -31,32 +36,46 @@ Visit us at www.scicsg.org
 Your donations are appreciated to support Amateur Radio.
 
 """
-
-version = "v19"
-fontsize = 10
-fontinterval = 2
-typeface = 'Courier'
-
 fdfont = (typeface, fontsize)  # regular fixed width font
 fdmfont = (typeface, fontsize + fontinterval)  # medium  fixed width font
 fdbfont = (typeface, fontsize + fontinterval * 2)  # large   fixed width font
 
-# Known Bug List
-#
-# some foreign callsigns not supported properly
-#   8a8xx
-#   need to change the way this works
-#   define a suffix as trailing letters
-#   prefix as anything ending in digits
-#   bring down a previous suffix with a character such as ' or .
+tzchart = """
+ UTC       PDT  CDT  EDT
+ GMT  PST  CST  EST
+"""
+#  Changed the color of the user buttons to red until assigned - KD4SIR Scott Hibbs 7/14/2013
+ocolor = 'red'
+lcolor = 'red'
+pcolor = 'red'
+updatect = 0
+
+suffix = ""
+call = ""
+band = "off"
+power = "0"
+operator = ""
+logger = ""
+age = 0
+vist = ""
+node = ""
+authk = ""
+port_base = 7373
+tdwin = 10  # time diff window on displaying node clock diffs
+showbc = 0  # show broadcasts
+debug = 0
+logdbf = "fdlog.fdd"  # persistent file copy of log database
+logfile = "fdlog.log"  # printable log file (contest entry)
+globf = "fdlog.dat"  # persistent global file
+kbuf = ""  # keyboard line buffer
+goBack = "" # needed to print the last line entered with up arrow - Scott Hibbs KD4SIR Jul/05/2018
+
 
 def fingerprint():
     t = open('FDLog_SCICSG.py').read()
     h = hashlib.md5()
     h.update(t)
     print " FDLog_SCICSG Fingerprint", h.hexdigest()
-
-fingerprint()
 
 def ival(s):
     """return value of leading int"""
@@ -131,8 +150,6 @@ class clock_class:
         ## or self.offset = float(database.get('tmast',0)) instead of the line above.
         self.adjusta -= adj
         print "Slewing clock", adj, "to", self.offset
-
-mclock = clock_class()
 
 # kc7sda - code cleanup and modify (refactor), added wfd support
 def initialize():
@@ -1210,6 +1227,11 @@ class node_info:
                 if b < 8 or b > 200: vhf += 1
         return r, hf, vhf, gotanode
 
+
+
+mclock = clock_class()
+
+
 class netsync:
     """network database synchronization"""
 	# removed netmask - it isn't used anywhere in the program from what I can tell (do a search for 'netmask' this is the only place you find it)
@@ -2020,9 +2042,7 @@ def contestlog(pr):
 # band set buttons
 # this can be customized -Only here customizing this in program will break from compatibility with
 # original fdlog.py -Scott Hibbs Oct/13/2013
-bands = ('160', '80', '40', '20', '15', '10', '6', '2', '220', '440', '900', '1200', 'sat', 'off')
-modes = ('c', 'd', 'p')
-bandb = {}  # band button handles
+
 
 def bandset(b):
     global band, tmob
@@ -2525,27 +2545,13 @@ def testqgen(n):
 # global section, main program
 # setup persistent globals before GUI
 
-suffix = ""
-call = ""
-band = "off"
-power = "0"
-operator = ""
-logger = ""
-age = 0
-vist = ""
-node = ""
-authk = ""
-port_base = 7373
+
 tmob = now()  # time started on band in min
-tdwin = 10  # time diff window on displaying node clock diffs
-showbc = 0  # show broadcasts
-debug = 0
-logdbf = "fdlog.fdd"  # persistent file copy of log database
-logfile = "fdlog.log"  # printable log file (contest entry)
-globf = "fdlog.dat"  # persistent global file
-kbuf = ""  # keyboard line buffer
-goBack = "" # needed to print the last line entered with up arrow - Scott Hibbs KD4SIR Jul/05/2018
 loadglob()  # load persistent globals from file
+
+# Start Main program (everything above should be setup only)
+print prog
+fingerprint()
 print
 if node == "":
     # Revised 4/19/2014 for 8 characters so the log lines up nicely. - Scott Hibbs KD4SIR
@@ -2616,95 +2622,14 @@ print "Saving Persistent Configuration in", globf
 saveglob()
 print "Time Difference Window (tdwin):", tdwin, "seconds"
 print "Starting GUI setup"
+
+# note: cannot move down with rest of init code from this point, error in class edit dialog occurs
 root = Tk()  # setup Tk GUI
 # root.withdraw()  # This was removed in the last beta without explaination - sah 7/3/2015
 menu = Menu(root)
 root.config(menu=menu)
-filemenu = Menu(menu, tearoff=0)
-menu.add_cascade(label="File", menu=filemenu)
-filemenu.add_command(label="Save Entry File", command=lambda: contestlog(1))
-filemenu.add_command(label="PreView Saved Entry File",
-                     command=lambda: viewtextf('fdlog.log'))
-filemenu.add_command(label="View Log Data File",
-                     command=lambda: viewtextf(logdbf))
-filemenu.add_command(label="Exit", command=root.quit)
-propmenu = Menu(menu, tearoff=0)
-menu.add_cascade(label="Properties", menu=propmenu)
-propmenu.add_command(label="Set Node ID", command=noddiag)
-propmenu.add_command(label="Add Participants", command=newpart.dialog)
-logmenu = Menu(menu, tearoff=0)
-menu.add_cascade(label="Logs", menu=logmenu)
-logmenu.add_command(label='Full Log', command=lambda: viewlogf(""))
-logmenu.add_command(label='QSTs', command=lambda: viewlogf(r"[*]QST"))
-logmenu.add_command(label='GOTA', command=lambda: viewlogfs("gota"))
-logmenu.add_command(label='WAS', command=viewwasrpt)
-for j in modes:
-    m = Menu(logmenu, tearoff=0)
-    if j == 'c':
-        lab = 'CW'
-    elif j == 'd':
-        lab = 'Digital'
-    elif j == 'p':
-        lab = 'Phone'
-    logmenu.add_cascade(label=lab, menu=m)
-    for i in bands:
-        if i == 'off': continue
-        bm = "%s%s" % (i, j)
-        m.add_command(label=bm, command=lambda x=bm: (viewlogf(x)))
-#  Added Resources Menu Item to clean up the menu. - Apr/16/2014 Scott Hibbs
-resourcemenu = Menu(menu, tearoff=0)
-menu.add_cascade(label="Resources", menu=resourcemenu)
-# Changed this from fdrules to just Rules to get away from fd name in file folder - Scott Hibbs KD4SIR Mar/28/2017
-resourcemenu.add_command(label="ARRL FD Rules (pdf)", command=lambda: os.startfile('Rules.pdf'))
-# Changed this to a .dat file to remove the duplicate txt file - Scott Hibbs KD4SIR Mar/28/2017
-resourcemenu.add_command(label="ARRL Sections", command=lambda: viewtextf('Arrl_sect.dat', 'ARRL Sections'))
-resourcemenu.add_command(label="ARRL Band Chart (pdf)", command=lambda: os.startfile('Bands.pdf'))
-resourcemenu.add_command(label="ARRL Band Plan", command=lambda: viewtextf('ARRL_Band_Plans.txt', "ARRL Band Plan"))
-# This is not needed with the band chart giving the same info - Scott Hibbs KD4SIR Mar/28/2017 
-#resourcemenu.add_command(label="FD Frequency List", command=lambda: viewtextf('frequencies.txt', "FD Frequency List"))
-# Removed the propagation report. We don't use it. - Mar/29/2017 Scott Hibbs KD4SIR 
-#resourcemenu.add_command(label="Propagation Info", command=lambda: viewtextf('propagation.txt', "Propagation Info"))
-# Created a W1AW menu - Scott Hibbs KD4SIR Mar/28/2017
-W1AWmenu = Menu(menu, tearoff=0)
-menu.add_cascade(label="W1AW", menu=W1AWmenu)
-W1AWmenu.add_command(label="W1AW Schedule", command=lambda: viewtextf('w1aw.txt', 'W1AW Schedule'))
-W1AWmenu.add_command(label="NTS Message", command=lambda: os.startfile('NTS_eg.txt'))
 
-# Time Conversion Chart
 
-tzchart = """
- UTC       PDT  CDT  EDT
- GMT  PST  CST  EST
-"""
-for g in range(0, 2400, 100):
-    p = g - 800
-    if (p < 0): p += 2400
-    c = p + 100
-    if (c < 0): c += 2400
-    e = c + 100
-    if (e < 0): e += 2400
-    x = e + 100
-    if (x < 0): x += 2400
-    tzchart += "%04d %04d %04d %04d %04d\n" % (g, p, c, e, x)
-resourcemenu.add_command(label="Time Conversion Chart", command=lambda: viewtextv(tzchart, "Time Conversion Chart"))
-helpmenu = Menu(menu, tearoff=0)
-menu.add_cascade(label="Help", menu=helpmenu)
-# Basically reworked the whole menu section. - Scott A Hibbs KD4SIR 7/25/13
-# Removed duplicate help sources and files. Rewrote documentation - Scott Hibbs Mar/31/2017
-# Renamed fdlogman to Manual to give distance from name of program - Scott Hibbs KD4SIR Mar/29/2017
-# Removed "getting started" from code to external text file. - Scott A Hibbs KD4SIR 7/25/13
-# Removed Wireless Network as it is not needed - Scott Hibbs KD4SIR Mar/29/2017
-helpmenu.add_command(label="Quick Help", command=lambda: viewtextf('Keyhelp.txt'))
-helpmenu.add_command(label="Set Commands", command=gd.sethelp)
-helpmenu.add_command(label="The Manual", command=lambda: viewtextf('Manual.txt', "Manual"))
-helpmenu.add_command(label="Release Log", command=lambda: viewtextf('Releaselog.txt'))
-helpmenu.add_command(label="GitHub ReadMe", command=lambda: viewtextf('readme.txt'))
-helpmenu.add_command(label="About SCICSG_FDLOG", command=lambda: viewtextv(about, "About"))
-
-# Band Buttons
-f1 = Frame(root, bd=1)
-BandButtons(f1)
-f1.grid(row=0, columnspan=2, sticky=NSEW)
 
 
 def testcmd(name, rex, value):
@@ -2731,7 +2656,6 @@ def setoper(op):
     opmb.config(background='yellow')
     saveglob()
 
-
 def setlog(logr):
     """set logger"""
     global logger
@@ -2742,41 +2666,6 @@ def setlog(logr):
     logds.config(text=logger, background=lcolor)
     logmb.config(background='yellow')
     saveglob()
-
-f1b = Frame(root, bd=0)  # oper logger power and network windows
-#  Changed the color of the user buttons to red until assigned - KD4SIR Scott Hibbs 7/14/2013
-ocolor = 'red'
-lcolor = 'red'
-pcolor = 'red'
-# Add "who" button to display messagebox with operators on band when clicked.
-# Determined that this is not needed now that the mouse over report is cleaner.
-#opwho = Menubutton(f1b, text='WHO ', font=fdfont, relief='raised',
-#                   background='grey', foreground='blue')
-#opwho.grid(row=0, column=0, sticky=NSEW)
-
-# Operator
-opmb = Menubutton(f1b,text='Contestant',font=fdfont,relief='raised', background=ocolor)
-opmb.grid(row=0,column=1,sticky=NSEW)
-opmu = Menu(opmb,tearoff=0)
-opmb.config(menu=opmu,direction='below')
-opmu.add_command(label="Add New Contestant",command=newpart.dialog)
-opds = Menubutton(f1b, text='<select Contestant>',font=fdfont,relief='raised',background=ocolor)
-opds.grid(row=0,column=0,sticky=NSEW)
-opdsu = Menu(opds,tearoff=0)
-opds.config(menu=opdsu,direction='below')
-f1b.grid_columnconfigure(0,weight=1)
-# Logger
-logmb = Menubutton(f1b,text="Logger",font=fdfont,relief='raised',background=lcolor)
-logmb.grid(row=0,column=4,sticky=NSEW)
-logmu = Menu(logmb,tearoff=0)
-logmb.config(menu=logmu,direction='below')
-logmu.add_command(label="Add New Logger",command=newpart.dialog)
-logds = Menubutton(f1b,text='<Select Logger>',font=fdfont,relief='raised',background=lcolor)
-logds.grid(row=0,column=3,sticky=NSEW)
-f1b.grid_columnconfigure(3,weight=1)
-logdsu = Menu(logds,tearoff=0)
-logds.config(menu=logdsu,direction='below')
-logdsu.add_command(label="Add New Logger",command=newpart.dialog)
 
 def buildmenus():
     opdsu.delete(0, END)
@@ -2870,128 +2759,6 @@ def setpwr(p):
         powcb.config(background=pcolor)
         powlbl.config(background=pcolor)
 
-pwrmb = Menubutton(f1b, text="Power", font=fdfont, relief='raised',
-                   background=pcolor)
-pwrmb.grid(row=0, column=6, sticky=NSEW)
-pwrmu = Menu(pwrmb, tearoff=0)
-pwrmb.config(menu=pwrmu, direction='below')
-# rearranged this menu - Scott Hibbs Mar/23/2017
-pwrmu.add_command(label='     0 Watts', command=lambda: (setpwr('0')))
-pwrmu.add_command(label='     5 Watts', command=lambda: (setpwr('5')))
-pwrmu.add_command(label='    50 Watts', command=lambda: (setpwr('50')))
-pwrmu.add_command(label='  100 Watts', command=lambda: (setpwr('100')))
-pwrmu.add_command(label='  150 Watts', command=lambda: (setpwr('150')))
-pwrmu.add_command(label='  200 Watts', command=lambda: (setpwr('200')))
-pwrmu.add_command(label='  500 Watts', command=lambda: (setpwr('500')))
-pwrmu.add_command(label='1000 Watts', command=lambda: (setpwr('1000')))
-pwrmu.add_command(label='1500 Watts', command=lambda: (setpwr('1500')))
-pwrmu.add_command(label='     5W Natural', command=lambda: (setpwr('5n')))
-pwrmu.add_command(label='   50W Natural', command=lambda: (setpwr('50n')))
-pwrmu.add_command(label=' 100W Natural', command=lambda: (setpwr('100n')))
-pwrmu.add_command(label=' 150W Natural', command=lambda: (setpwr('150n')))
-pwrnt = Entry(f1b, width=4, font=fdfont, background=pcolor, validate='focusout', validatecommand=ckpowr)
-pwrnt.grid(row=0, column=7, sticky=NSEW)
-powlbl = Label(f1b, text="W", font=fdfont, background=pcolor)
-powlbl.grid(row=0, column=8, sticky=NSEW)
-natv = IntVar()
-powcb = Checkbutton(f1b, text="Natural", variable=natv, command=ckpowr,
-                    font=fdfont, relief='raised', background=pcolor)
-powcb.grid(row=0, column=9, sticky=NSEW)
-setpwr(power)
-f1b.grid(row=1, columnspan=2, sticky=NSEW)
-# Added Network label - KD4SIR Scott Hibbs Oct 4, 2013
-# Added Node label - KD4SIR Scott Hibbs Oct/13/2013
-# Added wof label - KD4SIR Scott Hibbs Jan/19/2017
-# Added port label - KD4SIR Scott Hibbs Jan/19/2017
-# Network window
-lblnet = Label(f1b, text="Network Status", font=fdfont, foreground='blue', background='yellow')
-lblnet.grid(row=2, column=0, columnspan=9, sticky=NSEW)
-# Node window
-lblnode = Label(f1b, text="My Node: %s" % node, font=fdfont, foreground='blue', background='grey')
-lblnode.grid(row=2, column=9, columnspan=1, sticky=NSEW)
-# Whos on First Window to display operators on bands
-# lblwof = Label(f1b, text="", font=fdfont, foreground='blue', background='grey')
-# lblwof.grid(row=2, column=0, columnspan=9, sticky=NSEW)
-# Port window
-# lblport = Label(f1b, text="Port: %s" % port_base, font=fdfont, foreground='blue', background='grey')
-# lblport.grid(row=3, column=9, columnspan=1, sticky=NSEW)
-# log window
-logw = Text(root, takefocus=0, height=11, width=80, font=fdmfont,
-            background='grey', wrap=NONE, setgrid=1)
-# logw.configure(cursor='arrow')
-scroll = Scrollbar(root, command=logw.yview, background='grey')
-logw.configure(yscrollcommand=scroll.set)
-logw.grid(row=2, column=0, sticky=NSEW)
-scroll.grid(row=2, column=1, sticky=NS)
-root.grid_rowconfigure(2, weight=1)
-root.grid_columnconfigure(0, weight=1)
-# txtbillb = dialog window
-txtbillb = Text(root, takefocus=1, height=10, width=80, font=fdmfont,
-                wrap=NONE, setgrid=1, background='grey')
-scrollt = Scrollbar(root, command=txtbillb.yview)
-txtbillb.configure(yscrollcommand=scrollt.set)
-txtbillb.grid(row=3, column=0, sticky=NSEW)
-scrollt.grid(row=3, column=1, sticky=NS)
-root.grid_rowconfigure(3, weight=1)
-logw.tag_config("b", foreground="blue")
-logw.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", ("b"))
-logw.insert(END, "                            DATABASE DISPLAY WINDOW\n", ("b"))
-logw.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", ("b"))
-logw.insert(END, "%s\n" % prog, ("b"))
-#     Add a bottom window for station information
-# f1c = Frame(root, bd=1)
-# f1c.grid(row=4,columnspan=4,sticky=NSEW)
-#     Add entry box for entering data
-# entqsl = Entry(f1c,font=fdfont,background='grey')
-# entqsl.grid(row=4,column=0,sticky=NSEW)
-# txtentry = Text(f1c,takefocus=1,height=2,width=39,font=fdmfont,\
-# wrap=NONE,setgrid=1)
-# txtentry.grid(row=4,column=4,sticky=NSEW)
-# root.grid_rowconfigure(4,weight=1)
-# txtentry.insert(END,"Call-Class-Sect- \n")
-# fth2lbl = Label(f1c,text="-\n<",font=fdfont,background='grey')
-# fth2lbl.grid(row=4,column=3,sticky=NSEW)
-# Phonetics box
-# fthw2 = Text(f1c,takefocus=0,height=2,width=40,font=fdmfont,\
-#            background='grey',wrap=NONE,setgrid=1)
-# fthw2.configure(cursor='arrow')
-# fthw2.grid(row=4,column=2,sticky=NSEW)
-# root.grid_rowconfigure(4,weight=1)
-# fthw2.insert(END,"phonetics box")
-# txtentry.insert(END,"\n")
-# startup
-contestlog(0)  # define globals
-buildmenus()
-sms = syncmsg()  # setup sync message service
-qdb = qsodb()  # init qso database
-qdb.loadfile()  # read log file
-print "Showing GUI"
-print
-if node == gd.getv('tmast'):
-    print "This Node is the TIME MASTER!!"
-    print "THIS COMPUTER'S CLOCK BETTER BE RIGHT (preferably GPS locked)"
-    print "User should Insure that system time is within 1 second of the"
-    print "  correct time and that the CORRECT TIMEZONE is selected (in the OS)"
-    print
-else:
-    print "User should Insure that System Time is within a few seconds of the"
-    print "  correct time and that the CORRECT TIMEZONE is selected (in the OS)"
-print "To change system time, stop FDLog, change the time or zone, then restart"
-print
-# These root commands were removed without an explanation in the beta.
-# but I'm leaving them in. sah 7/3/2015
-root.update()
-root.deiconify()
-net.start()  # start threads
-renew_title()
-txtbillb.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", ("b"))
-txtbillb.insert(END, "                              Dialogue Window\n", ("b"))
-txtbillb.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n", ("b"))
-txtbillb.insert(END, "Please select the Contestant, Logger, Power and Band/Mode in red above.\n\n")
-txtbillb.insert(END, "-Call-Class-Sect- \n")
-txtbillb.config(insertwidth=3)
-txtbillb.focus_set()
-
 def topper():
     """This will reset the display for input. Added Jul/01/2016 KD4SIR Scott Hibbs"""
     txtbillb.insert(END, "\n")
@@ -3017,8 +2784,6 @@ def showthiscall(call):
 def mhelp():
     viewtextf('Keyhelp.txt')
 
-secName = {}
-
 def readSections():
     """this will read the Arrl_sect.dat file for sections"""
     # This modified from Alan Biocca version 153d - Scott Hibbs Feb/6/2017
@@ -3036,8 +2801,6 @@ def readSections():
         fd.close()
     except IOError,e:
         print "read error during readSections", e
-
-readSections()
 
 def proc_key(ch):
     "process keystroke"
@@ -3666,8 +3429,6 @@ def log_select(e):
         print "Cannot edit another person's contact."
     return 'break'
 
-updatect = 0
-
 # This function updated from 152i
 def update():
     "timed updater"
@@ -3689,12 +3450,278 @@ def update():
         mclock.update()
     if updatect > 59:  # 60 sec
         updatect = 0
+
+
+
+filemenu = Menu(menu, tearoff=0)
+menu.add_cascade(label="File", menu=filemenu)
+filemenu.add_command(label="Save Entry File", command=lambda: contestlog(1))
+filemenu.add_command(label="PreView Saved Entry File",
+                     command=lambda: viewtextf('fdlog.log'))
+filemenu.add_command(label="View Log Data File",
+                     command=lambda: viewtextf(logdbf))
+filemenu.add_command(label="Exit", command=root.quit)
+
+propmenu = Menu(menu, tearoff=0)
+menu.add_cascade(label="Properties", menu=propmenu)
+propmenu.add_command(label="Set Node ID", command=noddiag)
+propmenu.add_command(label="Add Participants", command=newpart.dialog)
+
+
+
+logmenu = Menu(menu, tearoff=0)
+menu.add_cascade(label="Logs", menu=logmenu)
+logmenu.add_command(label='Full Log', command=lambda: viewlogf(""))
+logmenu.add_command(label='QSTs', command=lambda: viewlogf(r"[*]QST"))
+logmenu.add_command(label='GOTA', command=lambda: viewlogfs("gota"))
+logmenu.add_command(label='WAS', command=viewwasrpt)
+
+for j in modes:
+    m = Menu(logmenu, tearoff=0)
+    if j == 'c':
+        lab = 'CW'
+    elif j == 'd':
+        lab = 'Digital'
+    elif j == 'p':
+        lab = 'Phone'
+    logmenu.add_cascade(label=lab, menu=m)
+    for i in bands:
+        if i == 'off': continue
+        bm = "%s%s" % (i, j)
+        m.add_command(label=bm, command=lambda x=bm: (viewlogf(x)))
+
+
+
+#  Added Resources Menu Item to clean up the menu. - Apr/16/2014 Scott Hibbs
+resourcemenu = Menu(menu, tearoff=0)
+menu.add_cascade(label="Resources", menu=resourcemenu)
+# Changed this from fdrules to just Rules to get away from fd name in file folder - Scott Hibbs KD4SIR Mar/28/2017
+resourcemenu.add_command(label="ARRL FD Rules (pdf)", command=lambda: os.startfile('Rules.pdf'))
+# Changed this to a .dat file to remove the duplicate txt file - Scott Hibbs KD4SIR Mar/28/2017
+resourcemenu.add_command(label="ARRL Sections", command=lambda: viewtextf('Arrl_sect.dat', 'ARRL Sections'))
+resourcemenu.add_command(label="ARRL Band Chart (pdf)", command=lambda: os.startfile('Bands.pdf'))
+resourcemenu.add_command(label="ARRL Band Plan", command=lambda: viewtextf('ARRL_Band_Plans.txt', "ARRL Band Plan"))
+# This is not needed with the band chart giving the same info - Scott Hibbs KD4SIR Mar/28/2017 
+#resourcemenu.add_command(label="FD Frequency List", command=lambda: viewtextf('frequencies.txt', "FD Frequency List"))
+# Removed the propagation report. We don't use it. - Mar/29/2017 Scott Hibbs KD4SIR 
+#resourcemenu.add_command(label="Propagation Info", command=lambda: viewtextf('propagation.txt', "Propagation Info"))
+
+
+# Created a W1AW menu - Scott Hibbs KD4SIR Mar/28/2017
+W1AWmenu = Menu(menu, tearoff=0)
+menu.add_cascade(label="W1AW", menu=W1AWmenu)
+W1AWmenu.add_command(label="W1AW Schedule", command=lambda: viewtextf('w1aw.txt', 'W1AW Schedule'))
+W1AWmenu.add_command(label="NTS Message", command=lambda: os.startfile('NTS_eg.txt'))
+
+
+# functions and classes loaded, move to final init and gui start
+
+# Time Conversion Chart
+for g in range(0, 2400, 100):
+    p = g - 800
+    if (p < 0): p += 2400
+    c = p + 100
+    if (c < 0): c += 2400
+    e = c + 100
+    if (e < 0): e += 2400
+    x = e + 100
+    if (x < 0): x += 2400
+    tzchart += "%04d %04d %04d %04d %04d\n" % (g, p, c, e, x)
+
+
+resourcemenu.add_command(label="Time Conversion Chart", command=lambda: viewtextv(tzchart, "Time Conversion Chart"))
+helpmenu = Menu(menu, tearoff=0)
+menu.add_cascade(label="Help", menu=helpmenu)
+# Basically reworked the whole menu section. - Scott A Hibbs KD4SIR 7/25/13
+# Removed duplicate help sources and files. Rewrote documentation - Scott Hibbs Mar/31/2017
+# Renamed fdlogman to Manual to give distance from name of program - Scott Hibbs KD4SIR Mar/29/2017
+# Removed "getting started" from code to external text file. - Scott A Hibbs KD4SIR 7/25/13
+# Removed Wireless Network as it is not needed - Scott Hibbs KD4SIR Mar/29/2017
+helpmenu.add_command(label="Quick Help", command=lambda: viewtextf('Keyhelp.txt'))
+helpmenu.add_command(label="Set Commands", command=gd.sethelp)
+helpmenu.add_command(label="The Manual", command=lambda: viewtextf('Manual.txt', "Manual"))
+helpmenu.add_command(label="Release Log", command=lambda: viewtextf('Releaselog.txt'))
+helpmenu.add_command(label="GitHub ReadMe", command=lambda: viewtextf('readme.txt'))
+helpmenu.add_command(label="About SCICSG_FDLOG", command=lambda: viewtextv(about, "About"))
+
+
+# Band Buttons
+f1 = Frame(root, bd=1)
+BandButtons(f1)
+f1.grid(row=0, columnspan=2, sticky=NSEW)
+
+
+
+f1b = Frame(root, bd=0)  # oper logger power and network windows
+
+# Add "who" button to display messagebox with operators on band when clicked.
+# Determined that this is not needed now that the mouse over report is cleaner.
+#opwho = Menubutton(f1b, text='WHO ', font=fdfont, relief='raised',
+#                   background='grey', foreground='blue')
+#opwho.grid(row=0, column=0, sticky=NSEW)
+
+# Operator
+opmb = Menubutton(f1b,text='Contestant',font=fdfont,relief='raised', background=ocolor)
+opmb.grid(row=0,column=1,sticky=NSEW)
+opmu = Menu(opmb,tearoff=0)
+opmb.config(menu=opmu,direction='below')
+opmu.add_command(label="Add New Contestant",command=newpart.dialog)
+opds = Menubutton(f1b, text='<select Contestant>',font=fdfont,relief='raised',background=ocolor)
+opds.grid(row=0,column=0,sticky=NSEW)
+opdsu = Menu(opds,tearoff=0)
+opds.config(menu=opdsu,direction='below')
+f1b.grid_columnconfigure(0,weight=1)
+# Logger
+logmb = Menubutton(f1b,text="Logger",font=fdfont,relief='raised',background=lcolor)
+logmb.grid(row=0,column=4,sticky=NSEW)
+logmu = Menu(logmb,tearoff=0)
+logmb.config(menu=logmu,direction='below')
+logmu.add_command(label="Add New Logger",command=newpart.dialog)
+logds = Menubutton(f1b,text='<Select Logger>',font=fdfont,relief='raised',background=lcolor)
+logds.grid(row=0,column=3,sticky=NSEW)
+f1b.grid_columnconfigure(3,weight=1)
+logdsu = Menu(logds,tearoff=0)
+logds.config(menu=logdsu,direction='below')
+logdsu.add_command(label="Add New Logger",command=newpart.dialog)
+
+
+
+
+pwrmb = Menubutton(f1b, text="Power", font=fdfont, relief='raised',
+                   background=pcolor)
+pwrmb.grid(row=0, column=6, sticky=NSEW)
+pwrmu = Menu(pwrmb, tearoff=0)
+pwrmb.config(menu=pwrmu, direction='below')
+# rearranged this menu - Scott Hibbs Mar/23/2017
+pwrmu.add_command(label='     0 Watts', command=lambda: (setpwr('0')))
+pwrmu.add_command(label='     5 Watts', command=lambda: (setpwr('5')))
+pwrmu.add_command(label='    50 Watts', command=lambda: (setpwr('50')))
+pwrmu.add_command(label='  100 Watts', command=lambda: (setpwr('100')))
+pwrmu.add_command(label='  150 Watts', command=lambda: (setpwr('150')))
+pwrmu.add_command(label='  200 Watts', command=lambda: (setpwr('200')))
+pwrmu.add_command(label='  500 Watts', command=lambda: (setpwr('500')))
+pwrmu.add_command(label='1000 Watts', command=lambda: (setpwr('1000')))
+pwrmu.add_command(label='1500 Watts', command=lambda: (setpwr('1500')))
+pwrmu.add_command(label='     5W Natural', command=lambda: (setpwr('5n')))
+pwrmu.add_command(label='   50W Natural', command=lambda: (setpwr('50n')))
+pwrmu.add_command(label=' 100W Natural', command=lambda: (setpwr('100n')))
+pwrmu.add_command(label=' 150W Natural', command=lambda: (setpwr('150n')))
+pwrnt = Entry(f1b, width=4, font=fdfont, background=pcolor, validate='focusout', validatecommand=ckpowr)
+pwrnt.grid(row=0, column=7, sticky=NSEW)
+powlbl = Label(f1b, text="W", font=fdfont, background=pcolor)
+powlbl.grid(row=0, column=8, sticky=NSEW)
+natv = IntVar()
+powcb = Checkbutton(f1b, text="Natural", variable=natv, command=ckpowr,
+                    font=fdfont, relief='raised', background=pcolor)
+powcb.grid(row=0, column=9, sticky=NSEW)
+setpwr(power)
+f1b.grid(row=1, columnspan=2, sticky=NSEW)
+# Added Network label - KD4SIR Scott Hibbs Oct 4, 2013
+# Added Node label - KD4SIR Scott Hibbs Oct/13/2013
+# Added wof label - KD4SIR Scott Hibbs Jan/19/2017
+# Added port label - KD4SIR Scott Hibbs Jan/19/2017
+# Network window
+lblnet = Label(f1b, text="Network Status", font=fdfont, foreground='blue', background='yellow')
+lblnet.grid(row=2, column=0, columnspan=9, sticky=NSEW)
+# Node window
+lblnode = Label(f1b, text="My Node: %s" % node, font=fdfont, foreground='blue', background='grey')
+lblnode.grid(row=2, column=9, columnspan=1, sticky=NSEW)
+# Whos on First Window to display operators on bands
+# lblwof = Label(f1b, text="", font=fdfont, foreground='blue', background='grey')
+# lblwof.grid(row=2, column=0, columnspan=9, sticky=NSEW)
+# Port window
+# lblport = Label(f1b, text="Port: %s" % port_base, font=fdfont, foreground='blue', background='grey')
+# lblport.grid(row=3, column=9, columnspan=1, sticky=NSEW)
+# log window
+logw = Text(root, takefocus=0, height=11, width=80, font=fdmfont,
+            background='grey', wrap=NONE, setgrid=1)
+# logw.configure(cursor='arrow')
+scroll = Scrollbar(root, command=logw.yview, background='grey')
+logw.configure(yscrollcommand=scroll.set)
+logw.grid(row=2, column=0, sticky=NSEW)
+scroll.grid(row=2, column=1, sticky=NS)
+root.grid_rowconfigure(2, weight=1)
+root.grid_columnconfigure(0, weight=1)
+# txtbillb = dialog window
+txtbillb = Text(root, takefocus=1, height=10, width=80, font=fdmfont,
+                wrap=NONE, setgrid=1, background='grey')
+scrollt = Scrollbar(root, command=txtbillb.yview)
+txtbillb.configure(yscrollcommand=scrollt.set)
+txtbillb.grid(row=3, column=0, sticky=NSEW)
+scrollt.grid(row=3, column=1, sticky=NS)
+root.grid_rowconfigure(3, weight=1)
+logw.tag_config("b", foreground="blue")
+logw.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", ("b"))
+logw.insert(END, "                            DATABASE DISPLAY WINDOW\n", ("b"))
+logw.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", ("b"))
+logw.insert(END, "%s\n" % prog, ("b"))
+#     Add a bottom window for station information
+# f1c = Frame(root, bd=1)
+# f1c.grid(row=4,columnspan=4,sticky=NSEW)
+#     Add entry box for entering data
+# entqsl = Entry(f1c,font=fdfont,background='grey')
+# entqsl.grid(row=4,column=0,sticky=NSEW)
+# txtentry = Text(f1c,takefocus=1,height=2,width=39,font=fdmfont,\
+# wrap=NONE,setgrid=1)
+# txtentry.grid(row=4,column=4,sticky=NSEW)
+# root.grid_rowconfigure(4,weight=1)
+# txtentry.insert(END,"Call-Class-Sect- \n")
+# fth2lbl = Label(f1c,text="-\n<",font=fdfont,background='grey')
+# fth2lbl.grid(row=4,column=3,sticky=NSEW)
+# Phonetics box
+# fthw2 = Text(f1c,takefocus=0,height=2,width=40,font=fdmfont,\
+#            background='grey',wrap=NONE,setgrid=1)
+# fthw2.configure(cursor='arrow')
+# fthw2.grid(row=4,column=2,sticky=NSEW)
+# root.grid_rowconfigure(4,weight=1)
+# fthw2.insert(END,"phonetics box")
+# txtentry.insert(END,"\n")
+# startup
+contestlog(0)  # define globals
+buildmenus()
+sms = syncmsg()  # setup sync message service
+qdb = qsodb()  # init qso database
+qdb.loadfile()  # read log file
+
+
+print "Showing GUI"
+print
+if node == gd.getv('tmast'):
+    print "This Node is the TIME MASTER!!"
+    print "THIS COMPUTER'S CLOCK BETTER BE RIGHT (preferably GPS locked)"
+    print "User should Insure that system time is within 1 second of the"
+    print "  correct time and that the CORRECT TIMEZONE is selected (in the OS)"
+    print
+else:
+    print "User should Insure that System Time is within a few seconds of the"
+    print "  correct time and that the CORRECT TIMEZONE is selected (in the OS)"
+print "To change system time, stop FDLog, change the time or zone, then restart"
+print
+
+# These root commands were removed without an explanation in the beta.
+# but I'm leaving them in. sah 7/3/2015
+root.update()
+root.deiconify()
+net.start()  # start threads
+renew_title()
+txtbillb.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", ("b"))
+txtbillb.insert(END, "                              Dialogue Window\n", ("b"))
+txtbillb.insert(END, "          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n", ("b"))
+txtbillb.insert(END, "Please select the Contestant, Logger, Power and Band/Mode in red above.\n\n")
+txtbillb.insert(END, "-Call-Class-Sect- \n")
+txtbillb.config(insertwidth=3)
+txtbillb.focus_set()
+
+
+readSections()
 root.bind('<ButtonRelease-1>', focevent)
 txtbillb.bind('<KeyPress>', kevent)
 logw.bind('<KeyPress>', kevent)  # use del key for?xx
 logw.bind('<Button-1>', log_select)  # start of log edit
 root.after(1000, update)  # 1 hz activity
 root.mainloop()  # gui up
+
+# Gui Exited, shutdown
 print "\nShutting down"
 # the end was updated from 152i
 band = 'off'  # gui down, xmt band off, preparing to quit
@@ -3705,7 +3732,7 @@ print "  globals saved"
 print "\n\nFDLog is shut down, you should close this console window now"
 time.sleep(0.5)
 # os._exit(1)  # kill the process somehow?
-exit(1)
+exit(1) #exit(1) means error, tried 0 and nothing and got errors each time
 
 # Suggestions/To Do:
 #
@@ -3730,4 +3757,12 @@ exit(1)
 #  Tried and tried to get wof (whoseonfirst) to return only one value for the mouse over.
 #    I don't have the python skilz... If you can awesome!!! -Scott Mar/18/2017
 #
+# Known Bug List
+#
+# some foreign callsigns not supported properly
+#   8a8xx
+#   need to change the way this works
+#   define a suffix as trailing letters
+#   prefix as anything ending in digits
+#   bring down a previous suffix with a character such as ' or .
 # eof
