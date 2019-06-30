@@ -1,6 +1,12 @@
 #!/usr/bin/python 
 # Added by Art Miller KC7SDA May/5/2017
 # NOTE for Linux users: you must convert the line endings from windows to linux
+### Programmers note: I have massaged the flow of the program to allow for easier modification and adding
+###     features. most of the global variables are near the top of the program with a few defined and 
+###     initialized throughout. Idealy all functions would be at the begging, as well as all 
+###     classes grouped together. My first attempt was disastrous and made this error out.
+###     
+
 import os
 import time
 import string
@@ -14,7 +20,7 @@ import sqlite3
 from Tkinter import Tk, END, NORMAL, DISABLED, re, sys, Toplevel, Frame, Label, Entry, Button, \
 W, EW, E, NONE, NSEW, NS, StringVar, Radiobutton, Tk, Menu, Menubutton, Text, Scrollbar, Checkbutton, RAISED, IntVar
 
-### Global Vars - can be initialized here
+### Global Vars - can be defined and initialized here
 bands = ('160', '80', '40', '20', '15', '10', '6', '2', '220', '440', '900', '1200', 'sat', 'off')
 modes = ('c', 'd', 'p')
 bandb = {}  # band button handles
@@ -81,7 +87,7 @@ logfile = "fdlog.log"  # printable log file (contest entry)
 globf = "fdlog.dat"  # persistent global file
 kbuf = ""  # keyboard line buffer
 goBack = "" # needed to print the last line entered with up arrow - Scott Hibbs KD4SIR Jul/05/2018
-
+participants = {}
 
 def fingerprint():
     t = open('FDLog_SCICSG.py').read()
@@ -98,7 +104,26 @@ def ival(s):
             r = int(mm.group(1))
     return r
 
+def exin(op):
+    """extract Contestant or logger initials"""
+    r = ""
+    m = re.match(r'([a-z0-9]{2,3})', op)
+    if m:
+        r = m.group(1)
+    return r
+
+def tmtofl(a):
+    """time to float in seconds, allow milliseconds"""
+    # Reworked in 152i
+    return calendar.timegm((2000 + int(a[0:2]), int(a[2:4]), int(a[4:6]),
+                            int(a[7:9]), int(a[9:11]), float(a[11:]), 0, 0, 0))
+
+def tmsub(a, b):
+    """time subtract in seconds"""
+    return tmtofl(a) - tmtofl(b)
+
 class clock_class:
+    """ slewing rate for time objects. add offset to any time calculations """
     level = 9  # my time quality level
     offset = 0  # my time offset from system clock, add to system time, sec
     adjusta = 0  # amount to adjust clock now (delta)
@@ -163,6 +188,8 @@ class clock_class:
         self.adjusta -= adj
         print "Slewing clock", adj, "to", self.offset
 
+mclock = clock_class() # initialize the slew clock
+
 # kc7sda - code cleanup and modify (refactor), added wfd support
 def initialize():
     k = "" # keyboard input
@@ -200,7 +227,7 @@ def initialize():
             globDb.put('contst', "WFD")
             qdb.globalshare('contst', "WFD")  # global to db
             renew_title()
-            print "Have a nice Field Day!"
+            print "Have a nice Winter Field Day!"
         if k == "v":
             globDb.put('contst', "VHF")
             qdb.globalshare('contst', "VHF")  # global to db
@@ -334,13 +361,6 @@ def initialize():
             pass                
     return
 
-def exin(op):
-    """extract Contestant or logger initials"""
-    r = ""
-    m = re.match(r'([a-z0-9]{2,3})', op)
-    if m:
-        r = m.group(1)
-    return r
 
 # sqlite database upgrade
 # sqlite3.connect(":memory:", check_same_thread = False)
@@ -1239,15 +1259,10 @@ class node_info:
                 if b < 8 or b > 200: vhf += 1
         return r, hf, vhf, gotanode
 
-
-
-mclock = clock_class()
-
-
 class netsync:
     """network database synchronization"""
-	# removed netmask - it isn't used anywhere in the program from what I can tell (do a search for 'netmask' this is the only place you find it)
-	# re-coded the ip address calculation to smooth it out and make it cross platform compatible. - Art Miller KC7SDA Jul/01/2018
+    # removed netmask - it isn't used anywhere in the program from what I can tell (do a search for 'netmask' this is the only place you find it)
+    # re-coded the ip address calculation to smooth it out and make it cross platform compatible. - Art Miller KC7SDA Jul/01/2018
     #netmask = '255.255.255.0'
     rem_adr = ""  # remote bc address
     authkey = hashlib.md5()
@@ -1400,17 +1415,13 @@ class netsync:
         """launch all threads"""
         #        global node
         print "This host:", self.hostname, "IP:", self.my_addr, "Mask:", self.bc_addr
-        #        if (self.hostname > "") & (node == 's'):
-        #            node = self.hostname             # should filter chars
-        #        print "Node ID:",node
-        print "Launching threads"
-        #        thread.start_new_thread(self.bcastr,())
+        print "Launching Networking threads"
         thread.start_new_thread(self.fillr, ())
         thread.start_new_thread(self.rcvr, ())
         if debug:
             print "threads launched"
         time.sleep(0.5)  # let em print
-        print "Startup complete"
+        print "Net Startup complete"
 
 class global_data:
     """Global data stored in the journal"""
@@ -1535,27 +1546,12 @@ class syncmsg:
             del self.msgs[0]
         self.lock.release()
 
-# global functions
-
 def now():
     """return current time in standard string format"""
-    # n = time.localtime(time.time())
-    n = time.gmtime(time.time() + mclock.offset)  # time in gmt utc
+    n = time.gmtime(time.time() + mclock.offset)  # time in gmt utc plus offset
     # offset to correct to master
     t = time.strftime("%y%m%d.%H%M%S", n)  # compact version YY
     return t
-
-def tmtofl(a):
-    """time to float in seconds, allow milliseconds"""
-    # Reworked in 152i
-    #    return time.mktime((2000+int(a[0:2]),int(a[2:4]),int(a[4:6]),\
-    #                       int(a[7:9]),int(a[9:11]),int(a[11:13]),0,0,0))
-    return calendar.timegm((2000 + int(a[0:2]), int(a[2:4]), int(a[4:6]),
-                            int(a[7:9]), int(a[9:11]), float(a[11:]), 0, 0, 0))
-
-def tmsub(a, b):
-    """time subtract in seconds"""
-    return tmtofl(a) - tmtofl(b)
 
 class GlobalDb:
     """new sqlite globals database fdlog.sq3 replacing globals file"""
@@ -1620,10 +1616,6 @@ def saveglob():
     globDb.put('tdwin', tdwin)
     globDb.put('debug', debug)
     globDb.put('timeok', timeok)
-    #    fd = file(globf,"w")
-    #    fd.write("|%s|%s|%s|%s|%s|%s|%s|"%(node,operator,logger,power,\
-    #                                       authk,tdwin,debug))
-    #    fd.close()
 
 # contest log section
 def getfile(fn):
@@ -1639,8 +1631,6 @@ def getfile(fn):
         print "Found file", fn
         # print data
     return data
-
-participants = {}
 
 def contestlog(pr):
     """generate contest entry and log forms"""
@@ -3611,8 +3601,7 @@ scroll.grid(row=2, column=1, sticky=NS)
 root.grid_rowconfigure(2, weight=1)
 root.grid_columnconfigure(0, weight=1)
 # txtbillb = dialog window
-txtbillb = Text(root, takefocus=1, height=10, width=80, font=fdmfont,
-                wrap=NONE, setgrid=1, background='grey')
+txtbillb = Text(root, takefocus=1, height=10, width=80, font=fdmfont,wrap=NONE, setgrid=1, background='grey')
 scrollt = Scrollbar(root, command=txtbillb.yview)
 txtbillb.configure(yscrollcommand=scrollt.set)
 txtbillb.grid(row=3, column=0, sticky=NSEW)
